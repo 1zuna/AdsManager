@@ -4,24 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import type { AppConfiguration } from "@/types/index";
 
 const DEFAULT_EXCLUDED = `Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu`;
 
 interface SettingsPanelProps {
-  config: {
-    serviceAccountPath: string;
-    fbToken: string;
-    excludedTabs: string;
-  };
-  onConfigChange: (config: {
-    serviceAccountPath: string;
-    fbToken: string;
-    excludedTabs: string;
-  }) => void;
+  config: AppConfiguration;
+  onConfigChange: (config: AppConfiguration) => void;
 }
 
 const SettingsPanel = ({ config, onConfigChange }: SettingsPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  const handleBrowse = async () => {
+    const filePath = await window.electronAPI?.openFile();
+    if (filePath) onConfigChange({ ...config, serviceAccountPath: filePath });
+  };
 
   const handleSave = () => {
     onConfigChange(config);
@@ -45,6 +43,20 @@ const SettingsPanel = ({ config, onConfigChange }: SettingsPanelProps) => {
         <div className="border-t border-border px-4 py-4 space-y-4">
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+              Google Sheet ID
+            </Label>
+            <Input
+              value={config.googleSheetId}
+              onChange={(e) =>
+                onConfigChange({ ...config, googleSheetId: e.target.value })
+              }
+              placeholder="1eXCO_wBqAp1oyYLSJ3uASPlH4UpKd-zma7t8YNPQNAk"
+              className="bg-secondary/50 border-border font-mono text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wider">
               Google Service Account JSON Path
             </Label>
             <div className="flex gap-2">
@@ -56,7 +68,7 @@ const SettingsPanel = ({ config, onConfigChange }: SettingsPanelProps) => {
                 placeholder="/path/to/service-account.json"
                 className="bg-secondary/50 border-border font-mono text-sm"
               />
-              <Button variant="outline" size="icon" title="Browse">
+              <Button variant="outline" size="icon" title="Browse" onClick={handleBrowse} disabled={!window.electronAPI}>
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
@@ -68,9 +80,9 @@ const SettingsPanel = ({ config, onConfigChange }: SettingsPanelProps) => {
             </Label>
             <Input
               type="password"
-              value={config.fbToken}
+              value={config.facebookApiToken}
               onChange={(e) =>
-                onConfigChange({ ...config, fbToken: e.target.value })
+                onConfigChange({ ...config, facebookApiToken: e.target.value })
               }
               placeholder="Enter your Facebook Marketing API token"
               className="bg-secondary/50 border-border font-mono text-sm"
