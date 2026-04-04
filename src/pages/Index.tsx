@@ -3,6 +3,7 @@ import { Play, Zap, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SettingsPanel from "@/components/SettingsPanel";
 import GroupSelector from "@/components/GroupSelector";
+import SchedulePanel from "@/components/SchedulePanel";
 import ExecutionLog from "@/components/ExecutionLog";
 import { toast } from "sonner";
 import { useConfig } from "@/hooks/useConfig";
@@ -65,7 +66,11 @@ const Index = () => {
 
       {/* Main */}
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-6 py-6">
-        <SettingsPanel config={config} onConfigChange={setConfig} />
+        <SettingsPanel
+            config={config}
+            onConfigChange={setConfig}
+            availableGroups={groups}
+          />
 
         <div className="rounded-lg border border-border bg-card p-4 space-y-4">
           <GroupSelector
@@ -88,7 +93,13 @@ const Index = () => {
           </Button>
         </div>
 
-        <ExecutionLog logs={logs} />
+        <SchedulePanel
+            scheduleEnabled={config.scheduleEnabled}
+            scheduleTime={config.scheduleTime}
+            onToggle={(enabled) => setConfig({ ...config, scheduleEnabled: enabled })}
+          />
+
+          <ExecutionLog logs={logs} />
       </main>
     </div>
   );

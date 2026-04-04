@@ -10,6 +10,7 @@ export type LogEntry = {
 
 interface ExecutionLogProps {
   logs: LogEntry[];
+  title?: string;
 }
 
 const typeColors: Record<LogEntry["type"], string> = {
@@ -26,7 +27,7 @@ const typePrefix: Record<LogEntry["type"], string> = {
   warning: "WARN",
 };
 
-const ExecutionLog = ({ logs }: ExecutionLogProps) => {
+const ExecutionLog = ({ logs, title = "Execution Log" }: ExecutionLogProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ const ExecutionLog = ({ logs }: ExecutionLogProps) => {
       <div className="flex items-center gap-2 border-b border-border px-3 py-2 bg-card/50">
         <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Execution Log
+          {title}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">{logs.length} entries</span>
       </div>

@@ -32,8 +32,8 @@ export class FacebookService {
   ): Promise<{ success: boolean; error?: string }> {
     // Normalise account ID
     const normalised = accountId.startsWith('act_') ? accountId : `act_${accountId}`
-    // FB API uses whole cents
-    const spendCap = Math.round(dailyBudgetUSD * 100)
+    // FB API spend_cap accepts the exact dollar amount as a float (e.g. 627.47)
+    const spendCap = dailyBudgetUSD
 
     try {
       await axios.post(

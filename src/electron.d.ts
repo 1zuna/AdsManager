@@ -1,4 +1,4 @@
-import type { AppConfiguration, LogEvent, ExecutionParams, GroupData } from './types/index'
+import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus } from './types/index'
 
 export {}
 
@@ -21,6 +21,16 @@ declare global {
       runExecution: (params: ExecutionParams) => Promise<void>
       onLog: (cb: (entry: LogEvent) => void) => void
       offLog: (cb: (entry: LogEvent) => void) => void
+
+      // Scheduled job
+      getScheduleStatus: () => Promise<ScheduleStatus>
+      startSchedule: () => Promise<ScheduleStatus>
+      stopSchedule: () => Promise<ScheduleStatus>
+      getScheduleLastLogs: () => Promise<LogEvent[]>
+      onScheduleStatus: (cb: (status: ScheduleStatus) => void) => void
+      offScheduleStatus: (cb: (status: ScheduleStatus) => void) => void
+      onScheduleLog: (cb: (entry: LogEvent) => void) => void
+      offScheduleLog: (cb: (entry: LogEvent) => void) => void
     }
   }
 }

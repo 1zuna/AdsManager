@@ -6,6 +6,12 @@ export interface AppConfiguration {
   serviceAccountPath: string
   facebookApiToken: string
   excludedTabs: string
+  /** Whether the daily scheduled job is enabled */
+  scheduleEnabled: boolean
+  /** HH:mm (24h) time to run the scheduled job each day */
+  scheduleTime: string
+  /** Tab names excluded from the scheduled job (manual execution is unaffected) */
+  scheduleExcludedGroups: string[]
 }
 
 export const DEFAULT_CONFIG: AppConfiguration = {
@@ -14,6 +20,21 @@ export const DEFAULT_CONFIG: AppConfiguration = {
   facebookApiToken: '',
   excludedTabs:
     'Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu',
+  scheduleEnabled: false,
+  scheduleTime: '08:00',
+  scheduleExcludedGroups: [],
+}
+
+export type ScheduleState = 'idle' | 'scheduled' | 'running' | 'completed' | 'error'
+
+export interface ScheduleStatus {
+  state: ScheduleState
+  /** ISO string of next scheduled trigger */
+  nextRun?: string
+  /** ISO string of last completed/failed run */
+  lastRun?: string
+  /** Error message if state === 'error' */
+  error?: string
 }
 
 /** Data parsed from a single customer sheet tab */

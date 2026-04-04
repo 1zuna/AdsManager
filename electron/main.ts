@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import { readFile } from 'fs/promises'
-import { registerIpcHandlers } from './ipcHandlers'
+import { registerIpcHandlers, schedulerService } from './ipcHandlers'
+import { ConfigService } from './services/configService'
 
 // Injected by rollup when compiled to CJS
 declare const __dirname: string
@@ -70,4 +71,9 @@ ipcMain.handle('shell:openExternal', (_event: unknown, url: string) => {
 app.whenReady().then(() => {
   registerIpcHandlers()
   createWindow()
+  // Auto-start the scheduler if it was enabled when the app was last closed
+  const savedConfig = new ConfigService().load()
+  if (savedConfig.scheduleEnabled) {
+    schedulerService.start(savedConfig)
+  }
 })

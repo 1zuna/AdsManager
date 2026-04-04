@@ -1,8 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfiguration, LogEvent, ExecutionParams, GroupData } from '../src/types/index'
+import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus } from '../src/types/index'
 
 // Tracks original cb → wrapped listener so removeListener can find the right handler
 const logListeners = new Map<
+  (entry: LogEvent) => void,
+  (_e: unknown, entry: LogEvent) => void
+>()
+const scheduleStatusListeners = new Map<
+  (status: ScheduleStatus) => void,
+  (_e: unknown, status: ScheduleStatus) => void
+>()
+const scheduleLogListeners = new Map<
   (entry: LogEvent) => void,
   (_e: unknown, entry: LogEvent) => void
 >()
@@ -39,6 +47,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (wrapped) {
       ipcRenderer.removeListener('execution:log', wrapped)
       logListeners.delete(cb)
+    }
+  },
+
+  // ── Schedule ───────────────────────────────────────────────────────────────
+  getScheduleStatus: (): Promise<ScheduleStatus> =>
+    ipcRenderer.invoke('schedule:status'),
+  startSchedule: (): Promise<ScheduleStatus> =>
+    ipcRenderer.invoke('schedule:start'),
+  stopSchedule: (): Promise<ScheduleStatus> =>
+    ipcRenderer.invoke('schedule:stop'),
+  getScheduleLastLogs: (): Promise<LogEvent[]> =>
+    ipcRenderer.invoke('schedule:lastLogs'),
+  onScheduleStatus: (cb: (status: ScheduleStatus) => void): void => {
+    const wrapped = (_e: unknown, status: ScheduleStatus) => cb(status)
+    scheduleStatusListeners.set(cb, wrapped)
+    ipcRenderer.on('schedule:status-changed', wrapped)
+  },
+  offScheduleStatus: (cb: (status: ScheduleStatus) => void): void => {
+    const wrapped = scheduleStatusListeners.get(cb)
+    if (wrapped) {
+      ipcRenderer.removeListener('schedule:status-changed', wrapped)
+      scheduleStatusListeners.delete(cb)
+    }
+  },
+  onScheduleLog: (cb: (entry: LogEvent) => void): void => {
+    const wrapped = (_e: unknown, entry: LogEvent) => cb(entry)
+    scheduleLogListeners.set(cb, wrapped)
+    ipcRenderer.on('schedule:log', wrapped)
+  },
+  offScheduleLog: (cb: (entry: LogEvent) => void): void => {
+    const wrapped = scheduleLogListeners.get(cb)
+    if (wrapped) {
+      ipcRenderer.removeListener('schedule:log', wrapped)
+      scheduleLogListeners.delete(cb)
     }
   },
 })
