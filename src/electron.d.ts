@@ -1,4 +1,4 @@
-import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus } from './types/index'
+import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus, UpdateStatus } from './types/index'
 
 export {}
 
@@ -31,6 +31,13 @@ declare global {
       offScheduleStatus: (cb: (status: ScheduleStatus) => void) => void
       onScheduleLog: (cb: (entry: LogEvent) => void) => void
       offScheduleLog: (cb: (entry: LogEvent) => void) => void
+
+      // Auto-updater
+      getAppVersion: () => Promise<string>
+      checkForUpdates: () => Promise<void>
+      installUpdate: () => Promise<void>
+      onUpdateStatus: (cb: (status: UpdateStatus) => void) => void
+      offUpdateStatus: (cb: (status: UpdateStatus) => void) => void
     }
   }
 }

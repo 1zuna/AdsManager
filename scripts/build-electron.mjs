@@ -17,6 +17,7 @@ const isDev = process.argv.includes('--dev')
 /** External packages that ship in node_modules at runtime — never bundle them */
 const external = [
   'electron',
+  'electron-updater',
   'googleapis',
   'axios',
   'date-fns',

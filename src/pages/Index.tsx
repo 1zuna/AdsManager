@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Play, Zap, Shield } from "lucide-react";
+import { Play, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SettingsPanel from "@/components/SettingsPanel";
 import GroupSelector from "@/components/GroupSelector";
 import SchedulePanel from "@/components/SchedulePanel";
 import ExecutionLog from "@/components/ExecutionLog";
+import UpdateBadge from "@/components/UpdateBadge";
 import { toast } from "sonner";
 import { useConfig } from "@/hooks/useConfig";
 import { useGroups } from "@/hooks/useGroups";
@@ -58,8 +59,7 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Shield className="h-3.5 w-3.5" />
-            Local-first
+            <UpdateBadge />
           </div>
         </div>
       </header>

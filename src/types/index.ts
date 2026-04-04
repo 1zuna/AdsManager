@@ -27,6 +27,18 @@ export const DEFAULT_CONFIG: AppConfiguration = {
 
 export type ScheduleState = 'idle' | 'scheduled' | 'running' | 'completed' | 'error'
 
+export type UpdateState = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+
+export interface UpdateStatus {
+  state: UpdateState
+  /** Version string of the available / downloaded update */
+  version?: string
+  /** Download progress 0-100 */
+  percent?: number
+  /** Error message when state === 'error' */
+  error?: string
+}
+
 export interface ScheduleStatus {
   state: ScheduleState
   /** ISO string of next scheduled trigger */

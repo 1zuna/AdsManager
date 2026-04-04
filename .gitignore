@@ -10,7 +10,16 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-electron
+release
 *.local
+
+# Sensitive credentials — never commit these
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!components.json
 
 # Editor directories and files
 .vscode/*

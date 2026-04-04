@@ -14,10 +14,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "electron:dev": "node scripts/build-electron.mjs --dev",
-    "electron:build": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder",
-    "electron:build:win": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --win",
-    "electron:build:mac": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --mac",
-    "electron:build:linux": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --linux"
+    "electron:build": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --publish never",
+    "electron:build:win": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --win --publish never",
+    "electron:build:mac": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --mac --publish never",
+    "electron:build:linux": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --linux --publish never",
+    "electron:release:win": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --win --publish always",
+    "electron:release:mac": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --mac --publish always",
+    "electron:release:linux": "node scripts/build-electron.mjs && vite build --mode electron && electron-builder --linux --publish always"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -55,6 +58,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.3",
     "embla-carousel-react": "^8.6.0",
     "googleapis": "^171.4.0",
     "input-otp": "^1.4.2",
@@ -104,6 +108,13 @@
   "build": {
     "appId": "com.adsmanager.fbadslimit",
     "productName": "FB Ads Limit Controller",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "YOUR_GITHUB_USERNAME",
+        "repo": "YOUR_REPO_NAME"
+      }
+    ],
     "directories": {
       "output": "release",
       "buildResources": "assets"

@@ -3,6 +3,7 @@ import { GoogleSheetsService } from './services/googleSheetsService'
 import { FacebookService } from './services/facebookService'
 import { ConfigService } from './services/configService'
 import { SchedulerService } from './services/schedulerService'
+import { updaterService } from './services/updaterService'
 import type { AppConfiguration, ExecutionParams, LogEvent, GroupData } from '../src/types/index'
 
 const sheetsService = new GoogleSheetsService()
@@ -155,6 +156,14 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('schedule:lastLogs', () => schedulerService.getLastLogs())
+
+  // ── Auto-updater ──────────────────────────────────────────────────────────
+  ipcMain.handle('update:check', () => updaterService.checkForUpdates())
+  ipcMain.handle('update:install', () => updaterService.quitAndInstall())
+  ipcMain.handle('update:getVersion', () => {
+    const { app } = require('electron') as typeof import('electron')
+    return app.getVersion()
+  })
 }
 
 function sleep(ms: number): Promise<void> {

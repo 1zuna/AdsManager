@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus } from '../src/types/index'
+import type { AppConfiguration, LogEvent, ExecutionParams, GroupData, ScheduleStatus, UpdateStatus } from '../src/types/index'
 
 // Tracks original cb → wrapped listener so removeListener can find the right handler
 const logListeners = new Map<
@@ -13,6 +13,10 @@ const scheduleStatusListeners = new Map<
 const scheduleLogListeners = new Map<
   (entry: LogEvent) => void,
   (_e: unknown, entry: LogEvent) => void
+>()
+const updateStatusListeners = new Map<
+  (status: UpdateStatus) => void,
+  (_e: unknown, status: UpdateStatus) => void
 >()
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -81,6 +85,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (wrapped) {
       ipcRenderer.removeListener('schedule:log', wrapped)
       scheduleLogListeners.delete(cb)
+    }
+  },
+
+  // ── Auto-updater ────────────────────────────────────────────────────────
+  getAppVersion: (): Promise<string> =>
+    ipcRenderer.invoke('update:getVersion'),
+  checkForUpdates: (): Promise<void> =>
+    ipcRenderer.invoke('update:check'),
+  installUpdate: (): Promise<void> =>
+    ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (cb: (status: UpdateStatus) => void): void => {
+    const wrapped = (_e: unknown, status: UpdateStatus) => cb(status)
+    updateStatusListeners.set(cb, wrapped)
+    ipcRenderer.on('update:status', wrapped)
+  },
+  offUpdateStatus: (cb: (status: UpdateStatus) => void): void => {
+    const wrapped = updateStatusListeners.get(cb)
+    if (wrapped) {
+      ipcRenderer.removeListener('update:status', wrapped)
+      updateStatusListeners.delete(cb)
     }
   },
 })
