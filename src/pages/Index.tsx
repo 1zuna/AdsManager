@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Play, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SettingsPanel from "@/components/SettingsPanel";
@@ -21,6 +21,17 @@ const Index = () => {
   const handleRefresh = async () => {
     await refresh(config.googleSheetId, config.excludedTabs);
   };
+
+  // Auto-sync Google Sheet tabs every 5 minutes
+  const configRef = useRef(config);
+  configRef.current = config;
+  useEffect(() => {
+    const id = setInterval(() => {
+      const { googleSheetId, excludedTabs } = configRef.current;
+      if (googleSheetId) refresh(googleSheetId, excludedTabs);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [refresh]);
 
   // Surface groups fetch error via toast when error changes
   React.useEffect(() => {
@@ -70,6 +81,8 @@ const Index = () => {
             config={config}
             onConfigChange={setConfig}
             availableGroups={groups}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
           />
 
         <div className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -95,7 +108,7 @@ const Index = () => {
 
         <SchedulePanel
             scheduleEnabled={config.scheduleEnabled}
-            scheduleTime={config.scheduleTime}
+            scheduleIntervalHours={config.scheduleIntervalHours ?? 2}
             onToggle={(enabled) => setConfig({ ...config, scheduleEnabled: enabled })}
           />
 

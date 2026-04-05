@@ -25,7 +25,14 @@ function log(message: string, type: LogEvent['type'] = 'info'): void {
 }
 
 // ── Shared execution loop ─────────────────────────────────────────────────────
-// Used by both the manual IPC handler and the scheduled job.
+// Implements the "Classification + Redistribution" strategy:
+//
+//   Case A – Start of day (all accounts Spent = 0):
+//     N_fund = total accounts; set limit = min(maxBuffer, remaining / N_fund) for all
+//
+//   Case B – During day (≥1 account has Spent > 0):
+//     Active  = accounts with Spent > 0.01   → get limit = min(maxBuffer, remaining / N_active)
+//     Inactive = accounts with Spent = 0      → limit cleared (optional: autoRevokeInactive)
 export async function executeForGroups(
   tabNames: string[],
   config: AppConfiguration,
@@ -49,12 +56,14 @@ export async function executeForGroups(
     return
   }
 
-  logFn(`Starting execution for ${tabNames.length} group(s)...`)
+  const { maxBuffer, autoRevokeInactive } = config
+
+  logFn(`Starting execution for ${tabNames.length} group(s) [maxBuffer=$${maxBuffer}, autoRevoke=${autoRevokeInactive}]...`)
 
   for (const tabName of tabNames) {
     logFn(`── Group: ${tabName}`)
 
-    let groupData
+    let groupData: GroupData | null
     try {
       groupData = await sheetsService.parseTab(config.googleSheetId, tabName)
     } catch (err) {
@@ -67,20 +76,71 @@ export async function executeForGroups(
       continue
     }
 
-    const { groupName, accountIds, remaining } = groupData
-    const perAccount = remaining! / accountIds!.length
+    const { groupName, accountIds, remaining, spent: groupSpent, accountSpentMap } = groupData
+    const allAccounts = accountIds!
+    const remainingVal = remaining!
+
+    // ── Step 1: Classify per-account ────────────────────────────────────────
+    // Use per-account spent from columns H+ (accountSpentMap). Fall back to
+    // tab-level aggregate (column F) only if accountSpentMap is absent.
+    const getSpent = (id: string): number => {
+      if (accountSpentMap && id in accountSpentMap) return accountSpentMap[id]
+      return groupSpent ?? 0
+    }
+
+    const activeAccounts = allAccounts.filter((id) => getSpent(id) > 0.01)
+    const inactiveAccounts = allAccounts.filter((id) => getSpent(id) <= 0.01)
+
+    // Case A: all accounts at $0 → fund all (start of day)
+    const isStartOfDay = activeAccounts.length === 0
+    const fundedAccounts = isStartOfDay ? allAccounts : activeAccounts
+    const revokedAccounts = isStartOfDay ? [] : inactiveAccounts
+
+    const nFund = fundedAccounts.length
+    if (nFund === 0) {
+      logFn(`   No accounts to fund — skipping.`, 'warning')
+      continue
+    }
+
+    // Case A (start of day): equal split — no spend ratio available yet
+    // Case B: proportional to each account's spend share (capped at maxBuffer)
+    const totalActiveSpent = isStartOfDay ? 0 : activeAccounts.reduce((s, id) => s + getSpent(id), 0)
+    const getLimitForAccount = (id: string): number => {
+      if (isStartOfDay || totalActiveSpent === 0) return Math.min(maxBuffer, remainingVal / nFund)
+      return Math.min(maxBuffer, (getSpent(id) / totalActiveSpent) * remainingVal)
+    }
+
     logFn(
-      `   ${groupName}: ${accountIds!.length} accounts, Remaining=$${remaining!.toFixed(2)}, Per-account=$${perAccount.toFixed(2)}`,
+      `   ${groupName}: ${allAccounts.length} accounts | Spent=$${(groupSpent ?? 0).toFixed(2)} | Remaining=$${remainingVal.toFixed(2)} | ${
+        isStartOfDay ? `Case A — fund all ${nFund} equally` : `Case B — fund ${nFund} active (proportional), revoke ${revokedAccounts.length} inactive`
+      }`,
     )
 
-    for (const accountId of accountIds!) {
+    // ── Step 2: Fund active (or all) accounts ──────────────────────────────
+    for (const accountId of fundedAccounts) {
+      const limit = getLimitForAccount(accountId)
       await sleep(150 + Math.random() * 250)
-      const result = await fbService.setSpendingLimit(accountId, perAccount, config.facebookApiToken)
+      const result = await fbService.setSpendingLimit(accountId, limit, config.facebookApiToken)
       if (result.success) {
-        logFn(`   ✓ ${accountId} → limit set to $${perAccount.toFixed(2)}`, 'success')
+        logFn(`   ✓ ${accountId} → limit set to $${limit.toFixed(2)}`, 'success')
       } else {
-        logFn(`   ✗ ${accountId} → ${result.error ?? 'unknown error'} (skipping)`, 'error')
+        logFn(`   ✗ ${accountId} → ${result.error ?? 'unknown error'}`, 'error')
       }
+    }
+
+    // ── Step 3: Revoke inactive accounts (Case B only) ─────────────────────
+    if (!isStartOfDay && autoRevokeInactive && revokedAccounts.length > 0) {
+      for (const accountId of revokedAccounts) {
+        await sleep(150 + Math.random() * 250)
+        const result = await fbService.clearSpendingLimit(accountId, config.facebookApiToken)
+        if (result.success) {
+          logFn(`   ↩ ${accountId} → limit cleared (inactive)`, 'info')
+        } else {
+          logFn(`   ✗ ${accountId} → clear failed: ${result.error ?? 'unknown error'}`, 'error')
+        }
+      }
+    } else if (!isStartOfDay && !autoRevokeInactive && revokedAccounts.length > 0) {
+      logFn(`   ℹ ${revokedAccounts.length} inactive account(s) — auto-revoke disabled, no change.`, 'info')
     }
 
     logFn(`── Group "${groupName}" completed.`)
@@ -99,8 +159,9 @@ export function registerIpcHandlers(): void {
       .filter(Boolean)
     await sheetsService.authenticate(config.serviceAccountPath)
     const allTabs = await sheetsService.listTabs(config.googleSheetId, excluded)
-    const tabNames = allTabs.filter((t) => !config.scheduleExcludedGroups.includes(t))
-    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${config.scheduleExcludedGroups.length} excluded).`)
+    const included = config.scheduleIncludedGroups ?? []
+    const tabNames = included.length > 0 ? allTabs.filter((t) => included.includes(t)) : []
+    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${included.length} included, ${allTabs.length - tabNames.length} skipped).`)
     await executeForGroups(tabNames, config, logFn)
   })
 

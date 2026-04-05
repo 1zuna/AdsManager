@@ -10,8 +10,10 @@ const DEFAULT_CONFIG: AppConfiguration = {
   excludedTabs:
     'Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu',
   scheduleEnabled: false,
-  scheduleTime: '08:00',
-  scheduleExcludedGroups: [],
+  scheduleIntervalHours: 2,
+  scheduleIncludedGroups: [],
+  maxBuffer: 100,
+  autoRevokeInactive: true,
 }
 
 function getConfigPath(): string {

@@ -18,6 +18,7 @@ export class SchedulerService {
   private lastError: string | undefined
   private lastRunLogs: LogEvent[] = []
   private runCallback: ScheduleRunCallback | null = null
+  private intervalHours = 2
 
   setRunCallback(cb: ScheduleRunCallback): void {
     this.runCallback = cb
@@ -31,6 +32,7 @@ export class SchedulerService {
       this.setState('idle')
       return
     }
+    this.intervalHours = config.scheduleIntervalHours ?? 2
     this.scheduleNext(config)
   }
 
@@ -52,6 +54,7 @@ export class SchedulerService {
       nextRun: this.nextRun,
       lastRun: this.lastRun,
       error: this.lastError,
+      intervalHours: this.intervalHours,
     }
   }
 
@@ -62,14 +65,14 @@ export class SchedulerService {
   // ── Internal ──────────────────────────────────────────────────────────────
 
   private scheduleNext(config: AppConfiguration): void {
-    const msUntil = msUntilTime(config.scheduleTime)
+    const msUntil = (config.scheduleIntervalHours ?? 2) * 60 * 60 * 1000
     this.nextRun = new Date(Date.now() + msUntil).toISOString()
     this.setState('scheduled')
 
     this.timer = setTimeout(async () => {
       this.timer = null
       await this.trigger(config)
-      // Re-schedule for the next day
+      // Re-schedule for the next interval
       this.scheduleNext(config)
     }, msUntil)
   }
@@ -105,20 +108,7 @@ export class SchedulerService {
   }
 }
 
-/** Compute milliseconds until the next occurrence of HH:mm (local time) */
-function msUntilTime(hhmm: string): number {
-  const [hh, mm] = hhmm.split(':').map(Number)
-  const now = new Date()
-  const target = new Date(now)
-  target.setHours(hh, mm, 0, 0)
-
-  if (target.getTime() <= now.getTime()) {
-    target.setDate(target.getDate() + 1)
-  }
-
-  return target.getTime() - now.getTime()
-}
-
 function getWin(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
 }
+

@@ -6,12 +6,16 @@ export interface AppConfiguration {
   serviceAccountPath: string
   facebookApiToken: string
   excludedTabs: string
-  /** Whether the daily scheduled job is enabled */
+  /** Whether the scheduled job is enabled */
   scheduleEnabled: boolean
-  /** HH:mm (24h) time to run the scheduled job each day */
-  scheduleTime: string
-  /** Tab names excluded from the scheduled job (manual execution is unaffected) */
-  scheduleExcludedGroups: string[]
+  /** How many hours between each scheduled run (default: 2) */
+  scheduleIntervalHours: number
+  /** Tab names included in the scheduled job — empty = all groups skipped (manual execution is unaffected) */
+  scheduleIncludedGroups: string[]
+  /** Cap per account per run: limitPerAcc = min(maxBuffer, remaining / N_fund) */
+  maxBuffer: number
+  /** When true, inactive accounts (Spent=0 while others have Spent>0) get their limit cleared */
+  autoRevokeInactive: boolean
 }
 
 export const DEFAULT_CONFIG: AppConfiguration = {
@@ -21,8 +25,10 @@ export const DEFAULT_CONFIG: AppConfiguration = {
   excludedTabs:
     'Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu',
   scheduleEnabled: false,
-  scheduleTime: '08:00',
-  scheduleExcludedGroups: [],
+  scheduleIntervalHours: 2,
+  scheduleIncludedGroups: [],
+  maxBuffer: 100,
+  autoRevokeInactive: true,
 }
 
 export type ScheduleState = 'idle' | 'scheduled' | 'running' | 'completed' | 'error'
@@ -47,6 +53,8 @@ export interface ScheduleStatus {
   lastRun?: string
   /** Error message if state === 'error' */
   error?: string
+  /** Interval in hours between runs */
+  intervalHours?: number
 }
 
 /** Data parsed from a single customer sheet tab */
@@ -56,8 +64,12 @@ export interface GroupData {
   groupName: string
   /** Account IDs from row 3, columns H onwards (act_ prefix expected). Absent when today's date was not found. */
   accountIds?: string[]
-  /** Remaining budget for today (raw numeric value from Column G). Absent when today's date was not found. */
+  /** Remaining budget for today (Column G). Absent when today's date was not found. */
   remaining?: number
+  /** Total spent today (Column F). Absent when today's date was not found. */
+  spent?: number
+  /** Per-account spent map: { accountId → spent amount } for today's row (Columns H+). */
+  accountSpentMap?: Record<string, number>
   /** Date string that matched today, format dd/MM/yyyy. Absent when today's date was not found. */
   date?: string
 }

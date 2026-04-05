@@ -48,11 +48,11 @@ function fmt(iso?: string): string {
 
 interface SchedulePanelProps {
   scheduleEnabled: boolean;
-  scheduleTime: string;
+  scheduleIntervalHours: number;
   onToggle: (enabled: boolean) => void;
 }
 
-const SchedulePanel = ({ scheduleEnabled, scheduleTime, onToggle }: SchedulePanelProps) => {
+const SchedulePanel = ({ scheduleEnabled, scheduleIntervalHours, onToggle }: SchedulePanelProps) => {
   const { status, displayLogs, start, stop } = useScheduler();
   const { label, color, Icon, spin } = STATE_CONFIG[status.state];
 
@@ -104,7 +104,7 @@ const SchedulePanel = ({ scheduleEnabled, scheduleTime, onToggle }: SchedulePane
           <div className="flex items-center gap-1 text-muted-foreground">
             <span className="uppercase tracking-wider">Next</span>
             <span className="text-foreground font-mono">{fmt(status.nextRun)}</span>
-            <span className="text-muted-foreground/60">({scheduleTime})</span>
+            <span className="text-muted-foreground/60">(every {scheduleIntervalHours}h)</span>
           </div>
         )}
 

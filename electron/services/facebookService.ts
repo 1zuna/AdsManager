@@ -53,6 +53,25 @@ export class FacebookService {
       return { success: false, error: message }
     }
   }
+  /**
+   * Deletes the spend cap for an ad account using spend_cap_action=delete.
+   * Used for inactive accounts in Case B to prevent budget lock-up.
+   */
+  async clearSpendingLimit(
+    accountId: string,
+    token: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const normalised = accountId.startsWith('act_') ? accountId : `act_${accountId}`
+    try {
+      await axios.post(`${FB_API_BASE}/${normalised}`, null, {
+        params: { access_token: token, spend_cap_action: 'delete' },
+        timeout: 15_000,
+      })
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: extractFbError(err) }
+    }
+  }
 }
 
 function extractFbError(err: unknown): string {
