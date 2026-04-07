@@ -1,0 +1,145 @@
+# Session Log — 2026-04-07
+# AdsManager / FB Ads Limit Controller
+# Append to this file throughout the session. Do NOT carry into next session.
+
+================================================================================
+## App Identity
+- Electron 33.4.11 + Vite 5 + React SWC + esbuild CJS build
+- Package: `fb-ads-limit-controller` v1.1.1
+- GitHub: `1zuna/AdsManager`
+- Entry: `dist-electron/main.cjs`
+- Build cmd: `node scripts/build-electron.mjs` → `✓ Electron layer built (prod)`
+
+================================================================================
+## Architecture Summary
+
+### Data Flow
+Google Sheets (tabs = customer groups)
+  → each tab: B2=groupName, C3+=dates, F3+=totalSpent, G3+=remaining, H3+=accountIDs
+  → H row (today's row): per-account spent values (H[rowIndex], I[rowIndex], ...)
+  → Electron reads → classifies → sets FB spend_cap via Marketing API
+
+### Key Files
+- `electron/services/googleSheetsService.ts`  — sheet reads + callWithRetry
+- `electron/services/facebookService.ts`       — setSpendingLimit / clearSpendingLimit
+- `electron/services/configService.ts`         — config persistence (userData/config.json)
+- `electron/services/schedulerService.ts`      — interval-based scheduler (N hours)
+- `electron/services/updaterService.ts`        — electron-updater GitHub releases
+- `electron/services/limitCacheService.ts`     — exists, NOT used by main loop
+- `electron/ipcHandlers.ts`                    — executeForGroups + all IPC handlers
+- `electron/preload.ts`                        — renderer bridge
+- `src/types/index.ts`                         — shared types
+- `src/components/SettingsPanel.tsx`           — config UI
+- `src/components/SchedulePanel.tsx`           — schedule status UI
+- `src/components/UpdateBadge.tsx`             — auto-update badge
+- `src/hooks/useUpdater.ts`                    — update state hook
+- `src/pages/Index.tsx`                        — main page
+- `scripts/build-electron.mjs`                 — esbuild CJS bundler
+
+================================================================================
+## AppConfiguration (src/types/index.ts)
+
+```typescript
+{
+  googleSheetId: string
+  serviceAccountPath: string
+  facebookApiToken: string
+  excludedTabs: string                  // comma-sep system tabs to skip
+  scheduleEnabled: boolean
+  scheduleIntervalHours: number         // default 2
+  scheduleIncludedGroups: string[]      // INCLUSION list — empty = all skipped
+  maxBuffer: number                     // default 100 — cap per account ($)
+  autoRevokeInactive: boolean           // default true
+}
+```
+
+### Default excluded system tabs (excludedTabs field):
+`Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ),
+Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu`
+
+================================================================================
+## Classification Algorithm (executeForGroups in ipcHandlers.ts)
+
+```
+For each tab in scheduleIncludedGroups:
+  - Wait 1200ms (throttle: ~50 reads/min, quota=60/min)
+  - parseTab() → GroupData { accountIds, remaining, spent, accountSpentMap }
+
+  getSpent(id) = accountSpentMap[id] ?? groupSpent ?? 0
+
+  activeAccounts  = filter(id => getSpent(id) > 0.01)
+  inactiveAccounts = filter(id => getSpent(id) <= 0.01)
+
+  CASE A (all $0, start of day):
+    fundedAccounts = ALL accounts
+    limit = min(maxBuffer, remaining / N)  — equal split
+
+  CASE B (≥1 account has Spent > 0):
+    fundedAccounts = activeAccounts
+    revokedAccounts = inactiveAccounts
+    totalActiveSpent = sum(getSpent for active)
+    limit[id] = min(maxBuffer, accountSpent[id] / totalActiveSpent × remaining)  — proportional
+
+  Step 2: setSpendingLimit(id, limit)  for all funded
+  Step 3: clearSpendingLimit(id)       for inactive (if autoRevokeInactive=true)
+```
+
+### FB API calls:
+- Set limit:   `POST /v24.0/act_{ID}?spend_cap={float}&access_token={token}`
+- Delete limit: `POST /v24.0/act_{ID}?spend_cap_action=delete&access_token={token}`
+
+================================================================================
+## Google Sheets Quota Management
+
+### callWithRetry (googleSheetsService.ts)
+- Catches: HTTP 429, "Quota exceeded", "RESOURCE_EXHAUSTED"
+- Backoff: 2s → 4s → 8s (3 retries)
+
+### executeForGroups loop
+- 1200ms delay per tab → ~50 reads/min
+
+### sheets:fetch (Refresh button)
+- `Promise.allSettled` — fires all concurrently (for speed, UI-only use)
+- callWithRetry handles any occasional 429
+
+================================================================================
+## Completed Changes This Session (2026-04-05 → 2026-04-07)
+
+### 1. clearSpendingLimit — correct FB API param
+- Was: `spend_cap=0` (removes cap → unlimited)
+- Fixed: `spend_cap_action=delete`
+- curl: `POST https://graph.facebook.com/v24.0/act_xxx?access_token=TOKEN&spend_cap_action=delete`
+
+### 2. Schedule: Excluded → Included groups
+- `scheduleExcludedGroups` renamed to `scheduleIncludedGroups` everywhere
+- Default `[]` = all groups skipped (opt-in model)
+- UI: "Groups Included in Schedule" with green badges; "None selected (all skipped)"
+- ipcHandlers: `allTabs.filter(t => included.includes(t))`
+
+### 3. Per-account spent classification
+- googleSheetsService: range changed `H3:ZZ3` → `H3:ZZ300` to read full block
+- Row 0 = account IDs; row[rowIndex] = per-account spent for today
+- GroupData: added `accountSpentMap?: Record<string, number>`
+- Classification now per-account (not tab-level aggregate)
+
+### 4. Proportional limit allocation (Case B)
+- Was: flat `remaining / N_active` cap for all active
+- Now: `min(maxBuffer, accountSpent[id] / totalActiveSpent × remaining)` per account
+- Case A unchanged: equal split (no ratio data yet)
+
+### 5. Google Sheets quota fixes
+- googleSheetsService: `callWithRetry` with exponential backoff
+- executeForGroups: 1200ms inter-tab delay
+- sheets:fetch: reverted to `Promise.allSettled` (fast, for UI only)
+
+================================================================================
+## Known / Outstanding
+- `limitCacheService.ts` exists but is unused — safe to delete if desired
+- autoRevokeInactive only matters when inactiveAccounts is non-empty (Case B)
+- Per-account spent assumes sheet columns H, I, J… align 1:1 with account IDs in H3, I3, J3…
+  → If a sheet has gaps or headers in H row, accountSpentMap may misalign
+
+================================================================================
+## Build Status
+Last build: ✓ Electron layer built (prod) — 2026-04-07
+All type checks: No errors in any modified files
