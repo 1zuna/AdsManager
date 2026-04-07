@@ -31,10 +31,36 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Wraps an API call with retry + exponential backoff to handle quota errors (429).
+   * Mirrors reconciliation.py's execute_with_retry(): waits 2s, 4s, 8s before giving up.
+   */
+  private async callWithRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+    let lastErr: unknown
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn()
+      } catch (err: unknown) {
+        const e = err as Record<string, unknown>
+        const status = (e?.response as Record<string, unknown>)?.status
+        const message = String(e?.message ?? '')
+        const isQuota = status === 429 || message.includes('Quota exceeded') || message.includes('RESOURCE_EXHAUSTED')
+        if (isQuota && attempt < retries) {
+          const waitMs = 2000 * Math.pow(2, attempt) // 2s → 4s → 8s
+          await new Promise((r) => setTimeout(r, waitMs))
+          lastErr = err
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastErr
+  }
+
+  /**
    * Returns all tab names from the spreadsheet, excluding system tabs.
    */
   async listTabs(sheetId: string, excludedTabs: string[]): Promise<string[]> {
-    const res = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId })
+    const res = await this.callWithRetry(() => this.sheets.spreadsheets.get({ spreadsheetId: sheetId }))
     const sheets = res.data.sheets ?? []
     return sheets
       .map((s) => s.properties?.title ?? '')
@@ -52,16 +78,18 @@ export class GoogleSheetsService {
 
     // Batch read: B2 (group name), C3:C300 (dates), F3:F300 (spent), G3:G300 (remaining),
     // H3:ZZ300 (row 3 = account IDs; today's row = per-account spent values)
-    const res = await this.sheets.spreadsheets.values.batchGet({
-      spreadsheetId: sheetId,
-      ranges: [
-        `'${tabName}'!B2`,
-        `'${tabName}'!C3:C300`,
-        `'${tabName}'!F3:F300`,
-        `'${tabName}'!G3:G300`,
-        `'${tabName}'!H3:ZZ300`,
-      ],
-    })
+    const res = await this.callWithRetry(() =>
+      this.sheets.spreadsheets.values.batchGet({
+        spreadsheetId: sheetId,
+        ranges: [
+          `'${tabName}'!B2`,
+          `'${tabName}'!C3:C300`,
+          `'${tabName}'!F3:F300`,
+          `'${tabName}'!G3:G300`,
+          `'${tabName}'!H3:ZZ300`,
+        ],
+      }),
+    )
 
     const [groupNameRange, datesRange, spentRange, remainingRange, accountBlockRange] =
       res.data.valueRanges ?? []

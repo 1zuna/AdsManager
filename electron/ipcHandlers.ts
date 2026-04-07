@@ -63,6 +63,8 @@ export async function executeForGroups(
   for (const tabName of tabNames) {
     logFn(`── Group: ${tabName}`)
 
+    // Throttle: 1 batchGet per tab, 1200ms apart → ~50 reads/min (quota = 60/min)
+    await sleep(1200)
     let groupData: GroupData | null
     try {
       groupData = await sheetsService.parseTab(config.googleSheetId, tabName)
@@ -185,6 +187,9 @@ export function registerIpcHandlers(): void {
         .map((t) => t.trim())
         .filter(Boolean)
       const tabs = await sheetsService.listTabs(sheetId, excluded)
+
+      // Fire all tabs concurrently — this is just for UI display/selection, not execution.
+      // callWithRetry in parseTab handles any occasional quota hiccup.
       const results = await Promise.allSettled(
         tabs.map((tab) => sheetsService.parseTab(sheetId, tab)),
       )
