@@ -161,9 +161,9 @@ export function registerIpcHandlers(): void {
       .filter(Boolean)
     await sheetsService.authenticate(config.serviceAccountPath)
     const allTabs = await sheetsService.listTabs(config.googleSheetId, excluded)
-    const included = config.scheduleIncludedGroups ?? []
-    const tabNames = included.length > 0 ? allTabs.filter((t) => included.includes(t)) : []
-    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${included.length} included, ${allTabs.length - tabNames.length} skipped).`)
+    const excludedFromSchedule = config.scheduleExcludedGroups ?? []
+    const tabNames = allTabs.filter((t) => !excludedFromSchedule.includes(t))
+    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${excludedFromSchedule.length} excluded).`)
     await executeForGroups(tabNames, config, logFn)
   })
 

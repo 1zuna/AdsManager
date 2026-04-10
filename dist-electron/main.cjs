@@ -221,7 +221,7 @@ var DEFAULT_CONFIG = {
   excludedTabs: "Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VN\u0110), Ads Rules Status, Update Money, Update Money 1, CustomMessage, B\u1EA3ng T\u1ED5ng H\u1EE3p, USD m\u1EABu",
   scheduleEnabled: false,
   scheduleIntervalHours: 2,
-  scheduleIncludedGroups: [],
+  scheduleExcludedGroups: [],
   maxBuffer: 100,
   autoRevokeInactive: true
 };
@@ -484,9 +484,9 @@ function registerIpcHandlers() {
     const excluded = config.excludedTabs.split(",").map((t) => t.trim()).filter(Boolean);
     await sheetsService.authenticate(config.serviceAccountPath);
     const allTabs = await sheetsService.listTabs(config.googleSheetId, excluded);
-    const included = config.scheduleIncludedGroups ?? [];
-    const tabNames = included.length > 0 ? allTabs.filter((t) => included.includes(t)) : [];
-    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${included.length} included, ${allTabs.length - tabNames.length} skipped).`);
+    const excludedFromSchedule = config.scheduleExcludedGroups ?? [];
+    const tabNames = allTabs.filter((t) => !excludedFromSchedule.includes(t));
+    logFn(`Scheduled job: ${tabNames.length} group(s) to process (${excludedFromSchedule.length} excluded).`);
     await executeForGroups(tabNames, config, logFn);
   });
   import_electron4.ipcMain.handle("config:load", () => configService.load());

@@ -20,11 +20,11 @@ interface SettingsPanelProps {
 
 const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh, isRefreshing = false }: SettingsPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [includedOpen, setIncludedOpen] = useState(false);
+  const [excludedOpen, setExcludedOpen] = useState(false);
   const [intervalInput, setIntervalInput] = useState(String(config.scheduleIntervalHours ?? 2));
-  const [includedSearch, setIncludedSearch] = useState("");
-  const includedRef = useRef<HTMLDivElement>(null);
-  const includedSearchRef = useRef<HTMLInputElement>(null);
+  const [excludedSearch, setExcludedSearch] = useState("");
+  const excludedRef = useRef<HTMLDivElement>(null);
+  const excludedSearchRef = useRef<HTMLInputElement>(null);
 
   // Sync local interval string when config loads from disk
   useEffect(() => {
@@ -32,32 +32,32 @@ const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh
   }, [config.scheduleIntervalHours]);
 
   useEffect(() => {
-    if (!includedOpen) {
-      setIncludedSearch("");
+    if (!excludedOpen) {
+      setExcludedSearch("");
       return;
     }
-    setTimeout(() => includedSearchRef.current?.focus(), 50);
+    setTimeout(() => excludedSearchRef.current?.focus(), 50);
     const handler = (e: MouseEvent) => {
-      if (includedRef.current && !includedRef.current.contains(e.target as Node)) {
-        setIncludedOpen(false);
+      if (excludedRef.current && !excludedRef.current.contains(e.target as Node)) {
+        setExcludedOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [includedOpen]);
+  }, [excludedOpen]);
 
-  const toggleScheduleIncluded = (tabName: string) => {
-    const current = config.scheduleIncludedGroups ?? [];
+  const toggleScheduleExcluded = (tabName: string) => {
+    const current = config.scheduleExcludedGroups ?? [];
     const next = current.includes(tabName)
       ? current.filter((g) => g !== tabName)
       : [...current, tabName];
-    onConfigChange({ ...config, scheduleIncludedGroups: next });
+    onConfigChange({ ...config, scheduleExcludedGroups: next });
   };
 
-  const removeIncluded = (tabName: string) => {
+  const removeExcluded = (tabName: string) => {
     onConfigChange({
       ...config,
-      scheduleIncludedGroups: (config.scheduleIncludedGroups ?? []).filter((g) => g !== tabName),
+      scheduleExcludedGroups: (config.scheduleExcludedGroups ?? []).filter((g) => g !== tabName),
     });
   };
 
@@ -219,7 +219,7 @@ const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                Groups Included in Schedule
+                Groups Excluded From Schedule
               </Label>
               {onRefresh && (
                 <button
@@ -234,33 +234,33 @@ const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh
               )}
             </div>
             <p className="text-xs text-muted-foreground -mt-1">
-              Only selected groups run on the schedule. Empty = all skipped.
+              Excluded groups are skipped by the schedule. Empty = all groups run.
             </p>
-            <div className="relative" ref={includedRef}>
+            <div className="relative" ref={excludedRef}>
               <button
                 type="button"
-                onClick={() => setIncludedOpen((v) => !v)}
+                onClick={() => setExcludedOpen((v) => !v)}
                 className="flex w-full items-center justify-between rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-muted-foreground hover:bg-secondary transition-colors"
               >
-                {(config.scheduleIncludedGroups ?? []).length === 0
-                  ? 'None selected (all skipped)'
-                  : `${config.scheduleIncludedGroups.length} group(s) included`}
+                {(config.scheduleExcludedGroups ?? []).length === 0
+                  ? 'None excluded (all groups run)'
+                  : `${config.scheduleExcludedGroups.length} group(s) excluded`}
                 <ChevronDown className="h-4 w-4" />
               </button>
-              {includedOpen && (
+              {excludedOpen && (
                 <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-xl">
                   {/* Search box */}
                   <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                     <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <input
-                      ref={includedSearchRef}
-                      value={includedSearch}
-                      onChange={(e) => setIncludedSearch(e.target.value)}
+                      ref={excludedSearchRef}
+                      value={excludedSearch}
+                      onChange={(e) => setExcludedSearch(e.target.value)}
                       placeholder="Search groups..."
                       className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                     />
-                    {includedSearch && (
-                      <button onClick={() => setIncludedSearch("")} className="text-muted-foreground hover:text-foreground">
+                    {excludedSearch && (
+                      <button onClick={() => setExcludedSearch("")} className="text-muted-foreground hover:text-foreground">
                         <X className="h-3 w-3" />
                       </button>
                     )}
@@ -273,28 +273,28 @@ const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh
                   ) : (
                     availableGroups
                       .filter((g) =>
-                        !includedSearch.trim() ||
-                        g.tabName.toLowerCase().includes(includedSearch.toLowerCase())
+                        !excludedSearch.trim() ||
+                        g.tabName.toLowerCase().includes(excludedSearch.toLowerCase())
                       )
                       .map((g) => {
-                      const isIncluded = (config.scheduleIncludedGroups ?? []).includes(g.tabName);
+                      const isExcluded = (config.scheduleExcludedGroups ?? []).includes(g.tabName);
                       return (
                         <button
                           key={g.tabName}
                           type="button"
-                          onClick={() => toggleScheduleIncluded(g.tabName)}
+                          onClick={() => toggleScheduleExcluded(g.tabName)}
                           className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-secondary/80 transition-colors ${
-                            isIncluded ? 'text-primary' : 'text-muted-foreground'
+                            isExcluded ? 'text-warning' : 'text-foreground'
                           }`}
                         >
                           <span
                             className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center text-[10px] ${
-                              isIncluded
-                                ? 'bg-primary/20 border-primary text-primary'
+                              isExcluded
+                                ? 'bg-warning/20 border-warning text-warning'
                                 : 'border-muted-foreground'
                             }`}
                           >
-                            {isIncluded && '✓'}
+                            {isExcluded && '✓'}
                           </span>
                           {g.tabName}
                         </button>
@@ -305,15 +305,15 @@ const SettingsPanel = ({ config, onConfigChange, availableGroups = [], onRefresh
                 </div>
               )}
             </div>
-            {(config.scheduleIncludedGroups ?? []).length > 0 && (
+            {(config.scheduleExcludedGroups ?? []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {config.scheduleIncludedGroups.map((tabName) => (
+                {config.scheduleExcludedGroups.map((tabName) => (
                   <span
                     key={tabName}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary"
+                    className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning"
                   >
                     {tabName}
-                    <button onClick={() => removeIncluded(tabName)} className="hover:opacity-70">
+                    <button onClick={() => removeExcluded(tabName)} className="hover:opacity-70">
                       <X className="h-3 w-3" />
                     </button>
                   </span>

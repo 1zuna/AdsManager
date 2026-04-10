@@ -10,8 +10,8 @@ export interface AppConfiguration {
   scheduleEnabled: boolean
   /** How many hours between each scheduled run (default: 2) */
   scheduleIntervalHours: number
-  /** Tab names included in the scheduled job — empty = all groups skipped (manual execution is unaffected) */
-  scheduleIncludedGroups: string[]
+  /** Tab names excluded from the scheduled job — empty = all groups run (manual execution is unaffected) */
+  scheduleExcludedGroups: string[]
   /** Cap per account per run: limitPerAcc = min(maxBuffer, remaining / N_fund) */
   maxBuffer: number
   /** When true, inactive accounts (Spent=0 while others have Spent>0) get their limit cleared */
@@ -26,7 +26,7 @@ export const DEFAULT_CONFIG: AppConfiguration = {
     'Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu',
   scheduleEnabled: false,
   scheduleIntervalHours: 2,
-  scheduleIncludedGroups: [],
+  scheduleExcludedGroups: [],
   maxBuffer: 100,
   autoRevokeInactive: true,
 }

@@ -11,7 +11,7 @@ const DEFAULT_CONFIG: AppConfiguration = {
     'Configuration, RAW Data Aggregated, Dashboard Summary, Dashboard Summary (VNĐ), Ads Rules Status, Update Money, Update Money 1, CustomMessage, Bảng Tổng Hợp, USD mẫu',
   scheduleEnabled: false,
   scheduleIntervalHours: 2,
-  scheduleIncludedGroups: [],
+  scheduleExcludedGroups: [],
   maxBuffer: 100,
   autoRevokeInactive: true,
 }
