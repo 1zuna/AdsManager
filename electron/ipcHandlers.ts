@@ -145,7 +145,7 @@ export async function executeForGroups(
       logFn(`   ℹ ${revokedAccounts.length} inactive account(s) — auto-revoke disabled, no change.`, 'info')
     }
 
-    logFn(`── Group "${groupName}" completed.`)
+    logFn(`── Group "${tabName}" completed.`)
   }
 
   logFn('Execution finished.', 'success')

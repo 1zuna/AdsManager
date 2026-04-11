@@ -107,6 +107,37 @@ const GroupSelector = ({
               )}
             </div>
 
+            {/* Select All / Unselect All */}
+            {filtered.length > 0 && (
+              <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+                <span className="text-xs text-muted-foreground">
+                  {filtered.filter((g) => selectedGroups.includes(g.tabName)).length}/{filtered.length} selected
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const allFilteredNames = filtered.map((g) => g.tabName);
+                      const alreadySelected = selectedGroups.filter((s) => !allFilteredNames.includes(s));
+                      onSelectionChange([...alreadySelected, ...allFilteredNames]);
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Select all
+                  </button>
+                  <span className="text-muted-foreground">·</span>
+                  <button
+                    onClick={() => {
+                      const allFilteredNames = new Set(filtered.map((g) => g.tabName));
+                      onSelectionChange(selectedGroups.filter((s) => !allFilteredNames.has(s)));
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    None
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="max-h-52 overflow-y-auto">
               {groups.length === 0 ? (
                 <div className="px-3 py-4 text-sm text-muted-foreground text-center">

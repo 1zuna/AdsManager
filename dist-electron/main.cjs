@@ -246,7 +246,9 @@ var ConfigService = class {
 
 // electron/services/schedulerService.ts
 var import_electron2 = require("electron");
-var MAX_LOG_ENTRIES = 500;
+var fs2 = __toESM(require("fs"), 1);
+var path2 = __toESM(require("path"), 1);
+var MAX_LOG_ENTRIES = 5e3;
 var SchedulerService = class {
   constructor() {
     this.timer = null;
@@ -306,11 +308,24 @@ var SchedulerService = class {
     this.lastRunLogs = [];
     this.setState("running");
     this.lastError = void 0;
+    const runStart = /* @__PURE__ */ new Date();
+    const logFile = getLogFilePath(runStart);
+    const runHeader = `
+========== Run started: ${runStart.toISOString()} ==========`;
+    appendToLogFile(logFile, [runHeader]);
+    const typeLabel = {
+      info: "[INFO]",
+      success: "[ OK ]",
+      error: "[ ERR]",
+      warning: "[WARN]"
+    };
     const logFn = (message, type = "info") => {
       const event = { message, type };
       this.lastRunLogs.push(event);
       if (this.lastRunLogs.length > MAX_LOG_ENTRIES) this.lastRunLogs.shift();
       getWin()?.webContents.send("schedule:log", event);
+      const ts = (/* @__PURE__ */ new Date()).toTimeString().slice(0, 8);
+      appendToLogFile(logFile, [`${ts} ${typeLabel[type]} ${message}`]);
     };
     try {
       await this.runCallback(config, logFn);
@@ -320,6 +335,11 @@ var SchedulerService = class {
       this.lastRun = (/* @__PURE__ */ new Date()).toISOString();
       this.lastError = err instanceof Error ? err.message : String(err);
       this.setState("error");
+    } finally {
+      const runEnd = /* @__PURE__ */ new Date();
+      appendToLogFile(logFile, [`========== Run ended:   ${runEnd.toISOString()} ==========
+`]);
+      pruneOldLogs();
     }
   }
   setState(state) {
@@ -329,6 +349,36 @@ var SchedulerService = class {
 };
 function getWin() {
   return import_electron2.BrowserWindow.getAllWindows()[0] ?? null;
+}
+function getLogsDir() {
+  return path2.join(import_electron2.app.getPath("userData"), "logs");
+}
+function getLogFilePath(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return path2.join(getLogsDir(), `${yyyy}-${mm}-${dd}.log`);
+}
+function appendToLogFile(filePath, lines) {
+  try {
+    fs2.mkdirSync(path2.dirname(filePath), { recursive: true });
+    fs2.appendFileSync(filePath, lines.join("\n") + "\n", "utf8");
+  } catch {
+  }
+}
+function pruneOldLogs() {
+  try {
+    const logsDir = getLogsDir();
+    if (!fs2.existsSync(logsDir)) return;
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1e3;
+    for (const file of fs2.readdirSync(logsDir)) {
+      if (!file.endsWith(".log")) continue;
+      const filePath = path2.join(logsDir, file);
+      const stat = fs2.statSync(filePath);
+      if (stat.mtimeMs < cutoff) fs2.unlinkSync(filePath);
+    }
+  } catch {
+  }
 }
 
 // electron/services/updaterService.ts
@@ -475,7 +525,7 @@ async function executeForGroups(tabNames, config, logFn) {
     } else if (!isStartOfDay && !autoRevokeInactive && revokedAccounts.length > 0) {
       logFn(`   \u2139 ${revokedAccounts.length} inactive account(s) \u2014 auto-revoke disabled, no change.`, "info");
     }
-    logFn(`\u2500\u2500 Group "${groupName}" completed.`);
+    logFn(`\u2500\u2500 Group "${tabName}" completed.`);
   }
   logFn("Execution finished.", "success");
 }
@@ -529,8 +579,8 @@ function registerIpcHandlers() {
   import_electron4.ipcMain.handle("update:check", () => updaterService.checkForUpdates());
   import_electron4.ipcMain.handle("update:install", () => updaterService.quitAndInstall());
   import_electron4.ipcMain.handle("update:getVersion", () => {
-    const { app: app3 } = require("electron");
-    return app3.getVersion();
+    const { app: app4 } = require("electron");
+    return app4.getVersion();
   });
 }
 function sleep(ms) {

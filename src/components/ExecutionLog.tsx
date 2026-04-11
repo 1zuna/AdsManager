@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "lucide-react";
 
 export type LogEntry = {
@@ -28,11 +28,24 @@ const typePrefix: Record<LogEntry["type"], string> = {
 };
 
 const ExecutionLog = ({ logs, title = "Execution Log" }: ExecutionLogProps) => {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottom = useRef(true);
 
+  // Auto-scroll only when already docked to bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isAtBottom.current) {
+      const el = scrollContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
   }, [logs]);
+
+  // Track whether the user is at the bottom of the log panel
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const threshold = 32; // px from bottom to still count as "docked"
+    isAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
 
   return (
     <div className="flex flex-col rounded-lg border border-border bg-terminal-bg overflow-hidden flex-1 min-h-0">
@@ -44,7 +57,11 @@ const ExecutionLog = ({ logs, title = "Execution Log" }: ExecutionLogProps) => {
         <span className="ml-auto text-xs text-muted-foreground">{logs.length} entries</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed terminal-scrollbar min-h-[200px] max-h-[400px]">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed terminal-scrollbar min-h-[200px] max-h-[400px]"
+      >
         {logs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             <span>Waiting for execution...</span>
@@ -60,7 +77,6 @@ const ExecutionLog = ({ logs, title = "Execution Log" }: ExecutionLogProps) => {
             </div>
           ))
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
