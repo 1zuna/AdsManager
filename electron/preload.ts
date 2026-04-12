@@ -14,6 +14,10 @@ const scheduleLogListeners = new Map<
   (entry: LogEvent) => void,
   (_e: unknown, entry: LogEvent) => void
 >()
+const tabDataListeners = new Map<
+  (data: GroupData) => void,
+  (_e: unknown, data: GroupData) => void
+>()
 const updateStatusListeners = new Map<
   (status: UpdateStatus) => void,
   (_e: unknown, status: UpdateStatus) => void
@@ -36,8 +40,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── Google Sheets ─────────────────────────────────────────────────────────
   fetchGroups: (sheetId: string, excludedTabs: string): Promise<GroupData[]> =>
-    ipcRenderer.invoke('sheets:fetch', sheetId, excludedTabs),
-
+    ipcRenderer.invoke('sheets:fetch', sheetId, excludedTabs),  loadGroupDetails: (sheetId: string, tabNames: string[]): Promise<void> =>
+    ipcRenderer.invoke('sheets:loadDetails', sheetId, tabNames),
+  onTabData: (cb: (data: GroupData) => void): void => {
+    const wrapped = (_e: unknown, data: GroupData) => cb(data)
+    tabDataListeners.set(cb, wrapped)
+    ipcRenderer.on('sheets:tab-data', wrapped)
+  },
+  offTabData: (cb: (data: GroupData) => void): void => {
+    const wrapped = tabDataListeners.get(cb)
+    if (wrapped) {
+      ipcRenderer.removeListener('sheets:tab-data', wrapped)
+      tabDataListeners.delete(cb)
+    }
+  },
   // ── Execution ─────────────────────────────────────────────────────────────
   runExecution: (params: ExecutionParams): Promise<void> =>
     ipcRenderer.invoke('execution:run', params),

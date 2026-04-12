@@ -3,6 +3,7 @@ var import_electron = require("electron");
 var logListeners = /* @__PURE__ */ new Map();
 var scheduleStatusListeners = /* @__PURE__ */ new Map();
 var scheduleLogListeners = /* @__PURE__ */ new Map();
+var tabDataListeners = /* @__PURE__ */ new Map();
 var updateStatusListeners = /* @__PURE__ */ new Map();
 import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   // ── File system (original) ──────────────────────────────────────────────
@@ -14,6 +15,19 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   saveConfig: (config) => import_electron.ipcRenderer.invoke("config:save", config),
   // ── Google Sheets ─────────────────────────────────────────────────────────
   fetchGroups: (sheetId, excludedTabs) => import_electron.ipcRenderer.invoke("sheets:fetch", sheetId, excludedTabs),
+  loadGroupDetails: (sheetId, tabNames) => import_electron.ipcRenderer.invoke("sheets:loadDetails", sheetId, tabNames),
+  onTabData: (cb) => {
+    const wrapped = (_e, data) => cb(data);
+    tabDataListeners.set(cb, wrapped);
+    import_electron.ipcRenderer.on("sheets:tab-data", wrapped);
+  },
+  offTabData: (cb) => {
+    const wrapped = tabDataListeners.get(cb);
+    if (wrapped) {
+      import_electron.ipcRenderer.removeListener("sheets:tab-data", wrapped);
+      tabDataListeners.delete(cb);
+    }
+  },
   // ── Execution ─────────────────────────────────────────────────────────────
   runExecution: (params) => import_electron.ipcRenderer.invoke("execution:run", params),
   onLog: (cb) => {

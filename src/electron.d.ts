@@ -16,6 +16,9 @@ declare global {
 
       // Google Sheets
       fetchGroups: (sheetId: string, excludedTabs: string) => Promise<GroupData[]>
+      loadGroupDetails: (sheetId: string, tabNames: string[]) => Promise<void>
+      onTabData: (cb: (data: GroupData) => void) => void
+      offTabData: (cb: (data: GroupData) => void) => void
 
       // Execution pipeline
       runExecution: (params: ExecutionParams) => Promise<void>

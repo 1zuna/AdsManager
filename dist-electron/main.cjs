@@ -22,12 +22,12 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // electron/main.ts
-var import_electron5 = require("electron");
+var import_electron6 = require("electron");
 var import_path = __toESM(require("path"), 1);
 var import_promises = require("fs/promises");
 
 // electron/ipcHandlers.ts
-var import_electron4 = require("electron");
+var import_electron5 = require("electron");
 
 // electron/services/googleSheetsService.ts
 var import_googleapis = require("googleapis");
@@ -430,13 +430,59 @@ var updaterService = {
   }
 };
 
+// electron/services/accountHistoryService.ts
+var import_electron4 = require("electron");
+var fs3 = __toESM(require("fs"), 1);
+var path3 = __toESM(require("path"), 1);
+var RETENTION_DAYS = 14;
+function getHistoryDir() {
+  return path3.join(import_electron4.app.getPath("userData"), "account-history");
+}
+function getTodayFilePath() {
+  const now = /* @__PURE__ */ new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return path3.join(getHistoryDir(), `${yyyy}-${mm}-${dd}.jsonl`);
+}
+function pruneOldFiles() {
+  try {
+    const dir = getHistoryDir();
+    if (!fs3.existsSync(dir)) return;
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1e3;
+    for (const file of fs3.readdirSync(dir)) {
+      if (!file.endsWith(".jsonl")) continue;
+      const filePath = path3.join(dir, file);
+      try {
+        const stat = fs3.statSync(filePath);
+        if (stat.mtimeMs < cutoff) fs3.unlinkSync(filePath);
+      } catch {
+      }
+    }
+  } catch {
+  }
+}
+var pruned = false;
+function recordAccountEvent(record) {
+  try {
+    const filePath = getTodayFilePath();
+    fs3.mkdirSync(path3.dirname(filePath), { recursive: true });
+    fs3.appendFileSync(filePath, JSON.stringify(record) + "\n", "utf8");
+    if (!pruned) {
+      pruned = true;
+      pruneOldFiles();
+    }
+  } catch {
+  }
+}
+
 // electron/ipcHandlers.ts
 var sheetsService = new GoogleSheetsService();
 var fbService = new FacebookService();
 var configService = new ConfigService();
 var schedulerService = new SchedulerService();
 function getWin3() {
-  return import_electron4.BrowserWindow.getAllWindows()[0] ?? null;
+  return import_electron5.BrowserWindow.getAllWindows()[0] ?? null;
 }
 function sendLog(event) {
   getWin3()?.webContents.send("execution:log", event);
@@ -511,6 +557,15 @@ async function executeForGroups(tabNames, config, logFn) {
       } else {
         logFn(`   \u2717 ${accountId} \u2192 ${result.error ?? "unknown error"}`, "error");
       }
+      recordAccountEvent({
+        ts: (/* @__PURE__ */ new Date()).toISOString(),
+        account: accountId,
+        group: tabName,
+        action: "set_limit",
+        amount: limit,
+        success: result.success,
+        error: result.success ? null : result.error ?? "unknown error"
+      });
     }
     if (!isStartOfDay && autoRevokeInactive && revokedAccounts.length > 0) {
       for (const accountId of revokedAccounts) {
@@ -521,6 +576,15 @@ async function executeForGroups(tabNames, config, logFn) {
         } else {
           logFn(`   \u2717 ${accountId} \u2192 clear failed: ${result.error ?? "unknown error"}`, "error");
         }
+        recordAccountEvent({
+          ts: (/* @__PURE__ */ new Date()).toISOString(),
+          account: accountId,
+          group: tabName,
+          action: "clear_limit",
+          amount: null,
+          success: result.success,
+          error: result.success ? null : result.error ?? "unknown error"
+        });
       }
     } else if (!isStartOfDay && !autoRevokeInactive && revokedAccounts.length > 0) {
       logFn(`   \u2139 ${revokedAccounts.length} inactive account(s) \u2014 auto-revoke disabled, no change.`, "info");
@@ -539,48 +603,58 @@ function registerIpcHandlers() {
     logFn(`Scheduled job: ${tabNames.length} group(s) to process (${excludedFromSchedule.length} excluded).`);
     await executeForGroups(tabNames, config, logFn);
   });
-  import_electron4.ipcMain.handle("config:load", () => configService.load());
-  import_electron4.ipcMain.handle("config:save", (_event, config) => {
+  import_electron5.ipcMain.handle("config:load", () => configService.load());
+  import_electron5.ipcMain.handle("config:save", (_event, config) => {
     configService.save(config);
     schedulerService.start(config);
   });
-  import_electron4.ipcMain.handle(
+  import_electron5.ipcMain.handle(
     "sheets:fetch",
     async (_event, sheetId, excludedTabsStr) => {
       const config = configService.load();
       await sheetsService.authenticate(config.serviceAccountPath);
       const excluded = excludedTabsStr.split(",").map((t) => t.trim()).filter(Boolean);
       const tabs = await sheetsService.listTabs(sheetId, excluded);
-      const results = await Promise.allSettled(
-        tabs.map((tab) => sheetsService.parseTab(sheetId, tab))
-      );
-      return tabs.map((tabName, i) => {
-        const r = results[i];
-        if (r.status === "fulfilled" && r.value !== null) return r.value;
-        return { tabName, groupName: tabName };
-      });
+      return tabs.map((tabName) => ({ tabName, groupName: tabName }));
     }
   );
-  import_electron4.ipcMain.handle("execution:run", async (_event, params) => {
+  import_electron5.ipcMain.handle(
+    "sheets:loadDetails",
+    async (_event, sheetId, tabNames) => {
+      const config = configService.load();
+      await sheetsService.authenticate(config.serviceAccountPath);
+      for (const tabName of tabNames) {
+        await sleep(1e3);
+        let groupData;
+        try {
+          groupData = await sheetsService.parseTab(sheetId, tabName) ?? { tabName, groupName: tabName };
+        } catch {
+          groupData = { tabName, groupName: tabName };
+        }
+        getWin3()?.webContents.send("sheets:tab-data", groupData);
+      }
+    }
+  );
+  import_electron5.ipcMain.handle("execution:run", async (_event, params) => {
     const { selectedGroups, config } = params;
     await executeForGroups(selectedGroups, config, (msg, type) => log(msg, type));
   });
-  import_electron4.ipcMain.handle("schedule:status", () => schedulerService.getStatus());
-  import_electron4.ipcMain.handle("schedule:start", () => {
+  import_electron5.ipcMain.handle("schedule:status", () => schedulerService.getStatus());
+  import_electron5.ipcMain.handle("schedule:start", () => {
     const config = configService.load();
     schedulerService.start(config);
     return schedulerService.getStatus();
   });
-  import_electron4.ipcMain.handle("schedule:stop", () => {
+  import_electron5.ipcMain.handle("schedule:stop", () => {
     schedulerService.stop();
     return schedulerService.getStatus();
   });
-  import_electron4.ipcMain.handle("schedule:lastLogs", () => schedulerService.getLastLogs());
-  import_electron4.ipcMain.handle("update:check", () => updaterService.checkForUpdates());
-  import_electron4.ipcMain.handle("update:install", () => updaterService.quitAndInstall());
-  import_electron4.ipcMain.handle("update:getVersion", () => {
-    const { app: app4 } = require("electron");
-    return app4.getVersion();
+  import_electron5.ipcMain.handle("schedule:lastLogs", () => schedulerService.getLastLogs());
+  import_electron5.ipcMain.handle("update:check", () => updaterService.checkForUpdates());
+  import_electron5.ipcMain.handle("update:install", () => updaterService.quitAndInstall());
+  import_electron5.ipcMain.handle("update:getVersion", () => {
+    const { app: app5 } = require("electron");
+    return app5.getVersion();
   });
 }
 function sleep(ms) {
@@ -592,7 +666,7 @@ var VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 var RENDERER_DIST = import_path.default.join(__dirname, "..", "dist");
 var win;
 function createWindow() {
-  win = new import_electron5.BrowserWindow({
+  win = new import_electron6.BrowserWindow({
     width: 960,
     height: 720,
     minWidth: 760,
@@ -611,32 +685,32 @@ function createWindow() {
     win.loadFile(import_path.default.join(RENDERER_DIST, "index.html"));
   }
 }
-import_electron5.app.on("window-all-closed", () => {
+import_electron6.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    import_electron5.app.quit();
+    import_electron6.app.quit();
     win = null;
   }
 });
-import_electron5.app.on("activate", () => {
-  if (import_electron5.BrowserWindow.getAllWindows().length === 0) createWindow();
+import_electron6.app.on("activate", () => {
+  if (import_electron6.BrowserWindow.getAllWindows().length === 0) createWindow();
 });
-import_electron5.ipcMain.handle("dialog:openFile", async () => {
+import_electron6.ipcMain.handle("dialog:openFile", async () => {
   if (!win) return null;
-  const result = await import_electron5.dialog.showOpenDialog(win, {
+  const result = await import_electron6.dialog.showOpenDialog(win, {
     title: "Select Google Service Account JSON",
     filters: [{ name: "JSON Files", extensions: ["json"] }],
     properties: ["openFile"]
   });
   return result.canceled ? null : result.filePaths[0];
 });
-import_electron5.ipcMain.handle("fs:readFile", async (_event, filePath) => {
+import_electron6.ipcMain.handle("fs:readFile", async (_event, filePath) => {
   if (!filePath.endsWith(".json")) throw new Error("Only .json files are allowed");
   return (0, import_promises.readFile)(filePath, "utf-8");
 });
-import_electron5.ipcMain.handle("shell:openExternal", (_event, url) => {
-  if (/^https:\/\//i.test(url)) import_electron5.shell.openExternal(url);
+import_electron6.ipcMain.handle("shell:openExternal", (_event, url) => {
+  if (/^https:\/\//i.test(url)) import_electron6.shell.openExternal(url);
 });
-import_electron5.app.whenReady().then(() => {
+import_electron6.app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
   const savedConfig = new ConfigService().load();

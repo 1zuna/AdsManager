@@ -4,6 +4,7 @@ import { FacebookService } from './services/facebookService'
 import { ConfigService } from './services/configService'
 import { SchedulerService } from './services/schedulerService'
 import { updaterService } from './services/updaterService'
+import { recordAccountEvent } from './services/accountHistoryService'
 import type { AppConfiguration, ExecutionParams, LogEvent, GroupData } from '../src/types/index'
 
 const sheetsService = new GoogleSheetsService()
@@ -128,6 +129,15 @@ export async function executeForGroups(
       } else {
         logFn(`   ✗ ${accountId} → ${result.error ?? 'unknown error'}`, 'error')
       }
+      recordAccountEvent({
+        ts: new Date().toISOString(),
+        account: accountId,
+        group: tabName,
+        action: 'set_limit',
+        amount: limit,
+        success: result.success,
+        error: result.success ? null : (result.error ?? 'unknown error'),
+      })
     }
 
     // ── Step 3: Revoke inactive accounts (Case B only) ─────────────────────
@@ -140,6 +150,15 @@ export async function executeForGroups(
         } else {
           logFn(`   ✗ ${accountId} → clear failed: ${result.error ?? 'unknown error'}`, 'error')
         }
+        recordAccountEvent({
+          ts: new Date().toISOString(),
+          account: accountId,
+          group: tabName,
+          action: 'clear_limit',
+          amount: null,
+          success: result.success,
+          error: result.success ? null : (result.error ?? 'unknown error'),
+        })
       }
     } else if (!isStartOfDay && !autoRevokeInactive && revokedAccounts.length > 0) {
       logFn(`   ℹ ${revokedAccounts.length} inactive account(s) — auto-revoke disabled, no change.`, 'info')
@@ -187,17 +206,29 @@ export function registerIpcHandlers(): void {
         .map((t) => t.trim())
         .filter(Boolean)
       const tabs = await sheetsService.listTabs(sheetId, excluded)
+      // Return name-only entries instantly (1 API call total).
+      // Per-tab details (remaining, accounts) are loaded progressively via sheets:loadDetails.
+      return tabs.map((tabName): GroupData => ({ tabName, groupName: tabName }))
+    },
+  )
 
-      // Fire all tabs concurrently — this is just for UI display/selection, not execution.
-      // callWithRetry in parseTab handles any occasional quota hiccup.
-      const results = await Promise.allSettled(
-        tabs.map((tab) => sheetsService.parseTab(sheetId, tab)),
-      )
-      return tabs.map((tabName, i): GroupData => {
-        const r = results[i]
-        if (r.status === 'fulfilled' && r.value !== null) return r.value
-        return { tabName, groupName: tabName }
-      })
+  // Streams per-tab details to the renderer one tab at a time (quota-safe: ~60 reads/min).
+  // Renderer subscribes to 'sheets:tab-data' events then invokes this handler.
+  ipcMain.handle(
+    'sheets:loadDetails',
+    async (_event: unknown, sheetId: string, tabNames: string[]) => {
+      const config = configService.load()
+      await sheetsService.authenticate(config.serviceAccountPath)
+      for (const tabName of tabNames) {
+        await sleep(1000) // 1 tab/sec → 60 reads/min (under the 60/min quota)
+        let groupData: GroupData
+        try {
+          groupData = (await sheetsService.parseTab(sheetId, tabName)) ?? { tabName, groupName: tabName }
+        } catch {
+          groupData = { tabName, groupName: tabName }
+        }
+        getWin()?.webContents.send('sheets:tab-data', groupData)
+      }
     },
   )
 
